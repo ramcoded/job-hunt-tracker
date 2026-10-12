@@ -38,18 +38,19 @@ Do not commit your filled-in prompt if this repository is public. If you want to
 
 Every run starts with the same check (Step 0 in the prompt):
 
-1. Reads `settings/schedule`. Any missing field falls back to the page defaults: `timezone` `Asia/Shanghai`, `updatesEnabled` true, `updatesFrom` 8, `updatesTo` 23, `listingsEnabled` true, `listingsHour` 8, `summaryEnabled` true, `summaryHour` 21.
+1. Reads `settings/schedule`. Any missing field falls back to the page defaults: `timezone` `Asia/Shanghai`, `updatesEnabled` true, `updatesFrom` 8, `updatesTo` 23, `listingsEnabled` true, `listingsHour` 8, `summaryEnabled` true, `summaryHour` 21, `importEnabled` true.
 2. Works out the current local hour H (0 to 23) and today's date in `timezone`.
 3. Reads `settings/searchRequest`. A request counts as pending if `status` is `pending`, or if `status` is `running` and `startedAt` is more than 2 hours ago (a previous run stopped partway).
 4. Decides which tasks are due:
    - Listings: a search request is pending, or `listingsEnabled` is true and H equals `listingsHour`.
    - Reply checks: `updatesEnabled` is true and H is inside the window from `updatesFrom` to `updatesTo`, inclusive. If `updatesFrom` is greater than `updatesTo`, the window wraps past midnight: H is inside it when H is at least `updatesFrom` or at most `updatesTo`.
+   - Import from email: `importEnabled` is true and H is inside the reply-check window, by the same rule as reply checks (so it also needs `updatesEnabled` to be true).
    - Summary: `summaryEnabled` is true and H equals `summaryHour`.
 5. If nothing is due, the run exits immediately and changes nothing.
 
-Due tasks run in this order: listings, reply checks, summary.
+Due tasks run in this order: listings, import from email, reply checks, summary. The import runs before reply checks so that jobs it imports are checked for replies in the same run.
 
-For example, with the defaults in Asia/Shanghai, the 08:00 run does listings and a reply check, the 09:00 to 20:00 runs do reply checks only, the 21:00 run does a reply check and the summary, and the runs from 00:00 to 07:00 exit straight away.
+For example, with the defaults in Asia/Shanghai, the 08:00 run does listings, an email import and a reply check, the 09:00 to 20:00 runs do an email import and a reply check, the 21:00 run does an email import, a reply check and the summary, and the runs from 00:00 to 07:00 exit straight away.
 
 ## Listings
 
@@ -81,12 +82,35 @@ What to expect from the sources:
 - JobStreet and Indeed block automated access (HTTP 403) whatever the network setting, so they usually appear as `blocked` in the report.
 - The routine needs network access to open postings. Without it, most candidates cannot be verified and appear as unverified near misses rather than listings. See [Deployment](deployment.md#allow-network-access-to-job-sites).
 
+## Import from email
+
+Runs every hour inside the reply-check window while `importEnabled` is on. Finds application confirmation emails in your Gmail for jobs you applied to outside the tracker, and adds or updates those jobs so they appear in the Applied tab without you entering them by hand. New jobs go straight to `applied`; there is no review step.
+
+1. Reads `settings/emailImport`. The search window starts 1 hour before `lastScanAt`; the overlap is harmless because step 4 skips repeats. If `lastScanAt` is missing (the first run), it searches the last 21 days.
+2. Searches Gmail for application confirmations, such as:
+   - Subjects or text like "Your application was sent to" (LinkedIn), "Application submitted" or "application has been submitted" (Indeed, JobStreet, Kalibrr, OnlineJobs.ph), "Thank you for applying", "We received your application" and "application received".
+   - Senders from job boards and applicant tracking systems: linkedin.com, indeed.com, jobstreet.com, kalibrr.com, onlinejobs.ph, greenhouse.io, lever.co, workable.com and workablemail.com, ashbyhq.com, Workday, SmartRecruiters and iCIMS.
+
+   It leaves out job alerts, newsletters, recommendations such as "jobs you may like", and emails that are rejections or interview invites. Those decisions are handled by reply checks.
+3. Reads each confirmation for the company, role, date applied (the email's date in the schedule `timezone`), posting URL if present (`http` or `https` only, preferring a direct posting link over tracking or unsubscribe links), source (the site name, such as "LinkedIn", "Indeed", "Greenhouse" or "Company site") and location if stated. If the company or role cannot be read clearly, it skips the email and counts it as unreadable. It never guesses or invents details.
+4. Skips any email whose Gmail message ID is already stored in a job's `emailMessageId`. It matches the rest against every job in `applications`, and against jobs imported earlier in the same run, using the [duplicate keys](data-model.md#duplicate-keys):
+   - Match in `listing` (or a missing or legacy `found` status) or `skipped`: moves the job to `applied`. Sets `dateApplied` to the email date only if it is empty, appends an `applied` entry to `history`, sets `emailMessageId`, `importedAt` (today) and `lastUpdate`, and prepends the note line `<YYYY-MM-DD> Applied outside the tracker (from email: <subject>)`. It keeps `addedBy` as it is. Counted as moved to Applied.
+   - Match in `applied`, `responded`, `interview`, `offer`, `rejected` or `ghosted`: leaves the status alone and only sets `emailMessageId` if it is empty. Counted as already tracked.
+   - No match: creates a new job with `status` `applied`, `addedBy` `email`, `dateApplied` set to the email date, `dateFound` and `importedAt` set to today, `match` `null`, `datePosted` `null`, empty `salary` and `fit`, the note `<YYYY-MM-DD> Imported from email: <subject>`, and `emailMessageId`. `contact` is the sender only when that is a real person, not a no-reply address. Counted as added.
+5. Writes updates pinned to the document version and retries once on a conflict. New jobs are created in one batch.
+6. If it added or moved at least one job, creates one `import` notification, such as "3 applications imported from email (1 moved from Listings)".
+7. Writes `settings/emailImport` on every run: `lastResult` with the counts (emails found, added, moved to Applied, already tracked, unreadable) and, only if the Gmail search succeeded, a new `lastScanAt`. The page shows this result in the **Schedule** dialog. The full shape is in [Data model](data-model.md#settingsemailimport).
+
+It only reads your Gmail. It never replies to, labels, archives or deletes email, and it sends no email itself.
+
+To turn the import off, clear **Import applications from email** in the **Schedule** dialog. Because it uses the reply-check window, it also stops when reply checks are off.
+
 ## Reply checks
 
 Runs every hour inside the reply-check window. Looks for employer replies in your Gmail and updates the matching jobs.
 
 1. Lists `applications` and keeps jobs whose status is `applied`, `responded`, `interview` or `ghosted`, so a late reply to a job you marked No reply is still caught. For each job it notes `company`, `role`, `contact`, `dateApplied`, `lastEmailCheck` and the document version. If there are none, it skips this task.
-2. For each job, searches Gmail for messages since the later of `lastEmailCheck` and `dateApplied` (default: the last 2 hours) that come from or mention the company or the `contact`. It ignores newsletters, job alerts, marketing and automatic "we received your application" messages unless they contain a decision.
+2. For each job, searches Gmail for messages since the later of `lastEmailCheck` and `dateApplied` (default: the last 2 hours) that come from or mention the company or the `contact`. It ignores newsletters, job alerts, marketing and automatic "we received your application" messages unless they contain a decision. Those confirmation emails are handled by the [import task](#import-from-email) instead.
 3. Classifies each genuine reply: interview invite or scheduling request becomes `interview`, offer becomes `offer`, rejection becomes `rejected`, and any other human reply becomes `responded`. It never moves a job backwards.
 4. Updates each job with a reply: new `status` and `history` entry when the status changed, `lastUpdate`, and a one-line dated summary prepended to `notes`. Writes are pinned to the document version so they do not overwrite edits you made at the same time; on a conflict it re-reads and retries once.
 5. Creates one `reply` notification per reply, linked to the job with `jobId`.
@@ -100,8 +124,8 @@ It never emails anyone except you, and never replies to, labels, archives or del
 Runs at `summaryHour`. Sends you one end-of-day email.
 
 1. Lists `applications` and `notifications`.
-2. Works out: listings the routine added today, jobs you applied to today, status changes today grouped by new status, follow-ups overdue, follow-ups due tomorrow, and totals (listings waiting, applied, responded, interviews, offers, response rate). "Today" is the date in the schedule's `timezone`.
-3. Sends one email with the subject "Job tracker: daily summary for <Mon D>" and these sections in order: Today at a glance, Replies and status changes, Applied today, New listings, Follow-ups (overdue, then due tomorrow), then the tracker URL. If nothing happened today and no follow-ups are overdue or due, it still sends a two-line email with the totals.
+2. Works out: listings the routine added today, jobs you applied to today, jobs imported from email today (`importedAt` is today), status changes today grouped by new status, follow-ups overdue, follow-ups due tomorrow, and totals (listings waiting, applied, responded, interviews, offers, response rate). "Today" is the date in the schedule's `timezone`.
+3. Sends one email with the subject "Job tracker: daily summary for <Mon D>" and these sections in order: Today at a glance, Replies and status changes, Applied today, Imported from email (each job as "company — role" marked "new" or "moved from Listings"; left out when there are none), New listings, Follow-ups (overdue, then due tomorrow), then the tracker URL. If nothing happened today and no follow-ups are overdue or due, it still sends a two-line email with the totals.
 4. Creates one `summary` notification with a one-sentence version of the email.
 
 Definitions the summary uses, which match the page:

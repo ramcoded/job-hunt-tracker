@@ -6,7 +6,7 @@ This document explains how to put the tracker into use: publishing `app/index.ht
 
 - A claude.ai account with Artifacts and Claude Code scheduled routines.
 - Claude Code, run from a copy of this repository.
-- The Gmail connector enabled on the same claude.ai account, for reply checks and the summary email.
+- The Gmail connector enabled on the same claude.ai account, for the email import, reply checks and the summary email.
 - A cloud environment for the routine with network access to job sites. See [Allow network access to job sites](#allow-network-access-to-job-sites).
 
 ## Publish the page
@@ -64,6 +64,8 @@ The routine reads the saved values on its next listings search. Each field is de
 3. Select **Save schedule**.
 
 The routine reads the schedule at the start of every run, so changes apply from the next hourly run. Until you save, the routine and the page use the defaults in the [README schedule table](../README.md#schedule).
+
+**Import applications from email** is on by default and runs during reply-check hours. Its first scan covers the last 21 days of your Gmail, so jobs you already applied to elsewhere appear in the Applied tab after the first run inside the reply window. See [Import from email](routines.md#import-from-email).
 
 ## Allow network access to job sites
 

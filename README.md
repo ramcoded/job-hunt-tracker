@@ -9,6 +9,7 @@ Job Hunt Tracker is a single-page job search tracker that runs as a private clau
 - Multi-source listings search: OnlineJobs.ph, the Remotive and Himalayas remote job feeds, and a web search that covers LinkedIn, Indeed, JobStreet, Glassdoor, Kalibrr, company career pages and applicant tracking system (ATS) pages.
 - Last search report: which sources worked, how many candidates were found, added, already tracked, closed, too old or mismatched, and up to 15 near misses you can add with **Add to Listings**.
 - Duplicate protection: the search never suggests a job you already track or skipped, the Listings view shows only the newest copy of a duplicated job, and the page refuses to add a duplicate by hand or from a near miss.
+- Import applications from email: during reply-check hours, the routine reads application confirmation emails in your Gmail (LinkedIn, Indeed, JobStreet, Kalibrr, OnlineJobs.ph and ATS pages such as Greenhouse, Lever, Workable and Ashby) and adds jobs you applied to outside the tracker straight to Applied, tagged "From email". A matching listing or skipped job moves to Applied instead of being added twice. The first scan covers the last 21 days.
 - Applied view: a table of every application with a status picker (Applied, Responded, Interview, Offer, Rejected, No reply) and status filter chips.
 - Pipeline strip: counts and rates for Applied, Responded, Interview and Offer.
 - Follow-up reminders: any job still in Applied 7 or more days after you applied shows up under the bell.
@@ -28,6 +29,7 @@ The page stores everything in the Artifact's built-in database, which it opens w
 The routine runs every hour. Each run first reads `settings/schedule` and `settings/searchRequest` from the database and works out which tasks are due in your time zone:
 
 - Listings: at your listings hour, or whenever a **Find jobs now** request is pending.
+- Import from email: every hour inside your reply-check window, unless you turn it off.
 - Reply checks: every hour inside your reply-check window.
 - Summary: at your summary hour.
 
@@ -37,7 +39,7 @@ If nothing is due, the run stops straight away. This is why you change timing fr
 flowchart LR
   user([You in a browser on claude.ai])
   page[Tracker page<br/>app/index.html]
-  db[(Artifact database<br/>applications, notifications,<br/>settings/preferences,<br/>settings/schedule,<br/>settings/searchRequest)]
+  db[(Artifact database<br/>applications, notifications,<br/>settings/preferences,<br/>settings/schedule,<br/>settings/searchRequest,<br/>settings/emailImport)]
   routine[Routine: hourly check<br/>routines/hourly-check.md<br/>every hour]
   due{What is due<br/>this hour?}
   web[Job sources:<br/>OnlineJobs.ph, Remotive,<br/>Himalayas, web search]
@@ -50,7 +52,7 @@ flowchart LR
   routine <-->|ArtifactData| db
   routine --> due
   due -->|listings| web
-  due -->|reply checks, summary email| gmail
+  due -->|email import, reply checks,<br/>summary email| gmail
   due --> stop
 ```
 
@@ -68,7 +70,7 @@ More detail:
 
 - A claude.ai account with access to Artifacts and Claude Code, including scheduled routines.
 - Claude Code installed, or access to claude.ai/code in a browser.
-- The Gmail connector enabled on your claude.ai account (needed for reply checks and the summary email).
+- The Gmail connector enabled on your claude.ai account (needed for the email import, reply checks and the summary email).
 - A cloud environment for the routine whose network access allows job sites (Full, or Custom with the job board domains you want searched). See [Deployment](docs/deployment.md#allow-network-access-to-job-sites).
 
 ### Setup
@@ -136,6 +138,7 @@ The `settings/schedule` document, edited from the **Schedule** dialog. All hours
 | Check for replies every hour (`updatesEnabled`) | on | Turns Gmail reply checks on or off. |
 | From (`updatesFrom`) | 8 (8:00 AM) | First hour of the reply-check window. |
 | To (`updatesTo`) | 23 (11:00 PM) | Last hour of the reply-check window, inclusive. If From is later than To, the window wraps past midnight. If they are equal, replies are checked once a day. |
+| Import applications from email (`importEnabled`) | on | Turns the Gmail import of application confirmation emails on or off. It runs during reply-check hours. |
 | Find new listings daily (`listingsEnabled`) | on | Turns the daily listings search on or off. **Find jobs now** works either way. |
 | Listings at (`listingsHour`) | 8 (8:00 AM) | Hour of the daily listings search. |
 | Send a daily summary (`summaryEnabled`) | on | Turns the summary email on or off. |
@@ -162,7 +165,7 @@ job-tracker/
   app/
     index.html                      The whole tracker page: HTML, CSS and JavaScript
   routines/
-    hourly-check.md                 Prompt for the hourly routine (listings, replies, summary)
+    hourly-check.md                 Prompt for the hourly routine (listings, email import, replies, summary)
   docs/
     data-model.md                   Database collections and fields
     routines.md                     Routine behavior, schedule logic and setup

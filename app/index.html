@@ -201,6 +201,10 @@ tbody tr:hover { background: var(--hover); }
 .job { display: flex; flex-direction: column; min-width: 0; }
 .job .link { font-weight: 600; }
 .job small { color: var(--muted); font-size: 14px; }
+/* Provenance tag: neutral, quieter than the status pill so it never competes with it. */
+.tag { display: inline-block; margin-left: 8px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 20px; color: var(--muted); white-space: nowrap; vertical-align: 1px; }
+.istatus { flex-basis: 100%; margin: 0 0 8px; font-size: 14px; color: var(--ink); }
+.istatus.err { color: var(--s-rejected); }
 .status { font: inherit; font-size: 14px; font-weight: 600; color: var(--c); background: color-mix(in srgb, var(--c) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--c) 30%, var(--surface)); border-radius: 999px; padding: 4px 8px; cursor: pointer; width: auto; }
 .cell-muted { color: var(--muted); font-size: 14px; }
 .match { font-family: var(--mono); font-size: 14px; white-space: nowrap; }
@@ -455,6 +459,11 @@ textarea { min-height: 88px; resize: vertical; }
         <label class="check"><input id="s-summaryEnabled" type="checkbox"> Send a daily summary</label>
         <div class="hours"><span class="pair"><span aria-hidden="true">at</span><select id="s-summaryHour" aria-label="Daily summary time"></select></span></div>
       </div>
+      <div class="srow">
+        <label class="check"><input id="s-importEnabled" type="checkbox" aria-describedby="s-importHint s-importStatus"> Import applications from email</label>
+        <p class="hint" id="s-importHint">Runs during reply-check hours. First scan covers the last 3 weeks.</p>
+        <p class="istatus" id="s-importStatus" role="status"></p>
+      </div>
     </div>
     <p class="note err" id="sErr" role="alert"></p>
     <div class="actions">
@@ -476,18 +485,20 @@ const STATUSES = [
 const LABEL = Object.fromEntries(STATUSES.map(s => [s.k, s.label]));
 LABEL.found = "Listing";
 const APPLIED = ["applied", "responded", "interview", "offer", "rejected", "ghosted"];
-const NTYPE = { listing: "New listing", reply: "Reply", status: "Status change", summary: "Daily summary", info: "Update" };
+const NTYPE = { listing: "New listing", reply: "Reply", status: "Status change", summary: "Daily summary", import: "Imported from email", info: "Update" };
 const LEVEL = { entry: "Entry", mid: "Mid", senior: "Senior", lead: "Lead" };
 const FOLLOW_UP_DAYS = 7;
 const PREF_LISTS = ["roles", "locations", "includeKeywords", "excludeKeywords", "excludeCompanies"];
 const SCHED_DEFAULTS = { timezone: "Asia/Shanghai", updatesEnabled: true, updatesFrom: 8, updatesTo: 23,
-  listingsEnabled: true, listingsHour: 8, summaryEnabled: true, summaryHour: 21 };
+  listingsEnabled: true, listingsHour: 8, summaryEnabled: true, summaryHour: 21, importEnabled: true };
+const SCHED_TOGGLES = ["updatesEnabled", "listingsEnabled", "summaryEnabled", "importEnabled"];
 const TIMEZONES = ["Asia/Shanghai", "Asia/Manila", "Asia/Singapore", "Asia/Tokyo", "Asia/Kolkata", "Europe/London",
   "Europe/Berlin", "America/New_York", "America/Chicago", "America/Los_Angeles", "UTC"];
 const SEARCH_STALE_MS = 2 * 3600e3; // a pending/running request older than this can be re-requested
 
 let jobs = [], notifs = [], prefs = null, view = null, sub = "all", query = "", showSkipped = false;
 let sched = null, schedLoaded = false, searchReq = null, searchErr = "";
+let emailImport = null, eiLoaded = false, eiErr = false; // settings/emailImport, written by the routine only
 let col = null, ncol = null, pref = null, sref = null, sreq = null, editingId = null, loaded = false, panelOpen = false;
 let hl = null, hlTimer = null, toastTimer = null, toastUndo = false, returnKey = null;
 // Report UI state lives only in memory: open + collapsed near misses each time a new report arrives.
@@ -528,7 +539,8 @@ function schedule() {
     updatesEnabled: bool(s.updatesEnabled, D.updatesEnabled),
     updatesFrom: validHour(s.updatesFrom, D.updatesFrom), updatesTo: validHour(s.updatesTo, D.updatesTo),
     listingsEnabled: bool(s.listingsEnabled, D.listingsEnabled), listingsHour: validHour(s.listingsHour, D.listingsHour),
-    summaryEnabled: bool(s.summaryEnabled, D.summaryEnabled), summaryHour: validHour(s.summaryHour, D.summaryHour)
+    summaryEnabled: bool(s.summaryEnabled, D.summaryEnabled), summaryHour: validHour(s.summaryHour, D.summaryHour),
+    importEnabled: bool(s.importEnabled, D.importEnabled)
   };
 }
 function schedSummary(s) {
@@ -536,6 +548,32 @@ function schedSummary(s) {
     : s.updatesFrom === s.updatesTo ? `Replies daily ${hourLabel(s.updatesFrom)}`
     : `Replies hourly ${hourLabel(s.updatesFrom)}–${hourLabel(s.updatesTo)}`;
   return `${replies} · Listings ${s.listingsEnabled ? hourLabel(s.listingsHour) : "off"} · Summary ${s.summaryEnabled ? hourLabel(s.summaryHour) : "off"} (${s.timezone})`;
+}
+// Timestamps may arrive as ISO strings, epoch ms, Date, or a Firestore-style Timestamp.
+function isoOf(v) {
+  if (!v) return null;
+  if (typeof v === "string") return isNaN(Date.parse(v)) ? null : v;
+  if (typeof v === "number") return new Date(v).toISOString();
+  if (v instanceof Date) return isNaN(v) ? null : v.toISOString();
+  if (typeof v.toDate === "function") { try { return v.toDate().toISOString(); } catch { return null; } }
+  if (typeof v.seconds === "number") return new Date(v.seconds * 1000).toISOString();
+  return null;
+}
+const fromEmail = j => j.addedBy === "email" || !!j.importedAt || !!j.emailMessageId;
+function importStatus() {
+  if (eiErr) return "Couldn't load the last email scan.";
+  if (!eiLoaded) return "Loading last scan…";
+  const e = emailImport || {}, r = e.lastResult && typeof e.lastResult === "object" ? e.lastResult : null;
+  const when = isoOf(r && r.at) || isoOf(e.lastScanAt);
+  if (!when) return "Not run yet.";
+  const added = r ? count(r.added) : 0, moved = r ? count(r.movedToApplied) : 0;
+  const parts = [added && `${added} added`, moved && `${moved} moved from Listings`].filter(Boolean);
+  return `Last scan ${ago(when)}: ${parts.length ? parts.join(", ") : "nothing new"}.`;
+}
+function renderImportStatus() {
+  const n = S("importStatus");
+  n.textContent = importStatus();
+  n.className = "istatus" + (eiErr ? " err" : "");
 }
 function tzLabel(tz) {
   let off = "";
@@ -909,7 +947,8 @@ function renderApplied(d) {
     const url = safeUrl(j.url);
     return el("tr", { "data-id": j.id, class: hl === j.id ? "hl" : null },
       el("td", { class: "c-job" }, el("div", { class: "job" },
-        el("span", {}, el("button", { class: "link", type: "button", "data-key": "edit:" + j.id, onclick: () => openEditor(j) }, co(j))),
+        el("span", {}, el("button", { class: "link", type: "button", "data-key": "edit:" + j.id, onclick: () => openEditor(j) }, co(j)),
+          fromEmail(j) ? el("span", { class: "tag", title: "Added automatically from an application confirmation email" }, "From email") : null),
         el("small", {}, [j.role, j.location].filter(Boolean).join(" · ")))),
       el("td", { class: "c-status" }, sel),
       el("td", { class: "c-applied cell-muted" }, j.dateApplied ? el("span", { class: "mono" }, `${fmtDate(j.dateApplied)} · ${agoDays(j.dateApplied)}`) : "—"),
@@ -1180,6 +1219,8 @@ $("form").addEventListener("submit", async e => {
     if (editingId) {
       const j = jobs.find(x => x.id === editingId) || {};
       Object.assign(data, j.status !== status ? statusChange({ ...j, dateApplied: data.dateApplied }, status) : {});
+      // update() merges, so fields the form doesn't show (addedBy, emailMessageId, importedAt, history…) are kept.
+      // Never switch this to set() without spreading the stored job first.
       await col.doc(editingId).update(data);
     } else {
       await col.add({ ...data, ...statusChange({ dateApplied: data.dateApplied }, status), dateFound: today(), addedBy: "user" });
@@ -1263,10 +1304,10 @@ function openSchedule() {
   const zones = TIMEZONES.includes(s.timezone) ? TIMEZONES : [s.timezone, ...TIMEZONES];
   S("timezone").replaceChildren(...zones.map(z => el("option", { value: z }, tzLabel(z))));
   S("timezone").value = s.timezone;
-  for (const k of ["updatesEnabled", "listingsEnabled", "summaryEnabled"]) S(k).checked = s[k];
+  for (const k of SCHED_TOGGLES) S(k).checked = s[k];
   for (const k of HOUR_FIELDS) S(k).value = String(s[k]);
   $("sErr").textContent = "";
-  syncSchedForm();
+  syncSchedForm(); renderImportStatus();
   $("sdlg").showModal();
   S("timezone").focus();
 }
@@ -1278,7 +1319,7 @@ $("sform").addEventListener("submit", async e => {
   if (!sref) { $("sErr").textContent = "Saving isn't available in this view."; return; }
   // Merge over the stored doc so fields Claude owns (routineUrl) survive the save.
   const data = { ...(sched || {}), timezone: S("timezone").value, updatedAt: new Date().toISOString() };
-  for (const k of ["updatesEnabled", "listingsEnabled", "summaryEnabled"]) data[k] = S(k).checked;
+  for (const k of SCHED_TOGGLES) data[k] = S(k).checked;
   for (const k of HOUR_FIELDS) data[k] = validHour(S(k).value, SCHED_DEFAULTS[k]);
   $("sSave").disabled = true; $("sErr").textContent = "";
   try { await sref.set(data); $("sdlg").close(); toast("Schedule saved. It applies from the next hourly check."); }
@@ -1321,6 +1362,9 @@ render();
   sref.onSnapshot(snap => { sched = snapData(snap); schedLoaded = true; render(); },
     () => note("Couldn't load your check schedule.", true));
 
+  settingsDoc("emailImport").onSnapshot(snap => { emailImport = snapData(snap); eiLoaded = true; eiErr = false; if ($("sdlg").open) renderImportStatus(); },
+    () => { eiErr = true; if ($("sdlg").open) renderImportStatus(); });
+
   sreq = settingsDoc("searchRequest");
   let rLoaded = false;
   sreq.onSnapshot(snap => {
@@ -1335,6 +1379,6 @@ render();
   }, () => note("Couldn't load the job search status.", true));
 
   // Keep "x minutes ago" labels and the 2-hour re-request window current.
-  setInterval(render, 60000);
+  setInterval(() => { render(); if ($("sdlg").open) renderImportStatus(); }, 60000);
 })();
 </script>
