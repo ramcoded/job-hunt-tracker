@@ -13,7 +13,7 @@ Things to know:
 - The scheduler may offset the start minute. A routine scheduled for every hour can run at, for example, :08 past each hour. The routine only looks at the hour, so this does not change which tasks run.
 - Gmail access goes through the claude.ai Gmail connector, which must be enabled on the same account that owns the routine.
 - The routine reads and writes the tracker with the `ArtifactData` tool, which acts as you. Create the routine on the same claude.ai account that owns the artifact.
-- The routine runs in a cloud environment. Its network access setting must allow job sites, or `WebFetch` cannot open postings. See [Deployment](deployment.md#allow-network-access-to-job-sites).
+- The routine runs in a cloud environment. Its network access setting must allow job sites and feeds, or `WebFetch` cannot open postings and most results end up as unverified near misses. See [Deployment](deployment.md#allow-network-access-to-job-sites).
 
 ## Summary
 
@@ -53,18 +53,33 @@ For example, with the defaults in Asia/Shanghai, the 08:00 run does listings and
 
 ## Listings
 
-Adds new job listings that match your saved preferences. It runs at `listingsHour`, or at the next run after you select **Find jobs now**.
+Adds new job listings that match your saved preferences and reports what it found. It runs at `listingsHour`, or at the next run after you select **Find jobs now**.
 
 1. If a search request triggered the run, sets `settings/searchRequest` to `status` `running` with `startedAt`.
-2. Reads `settings/preferences`. If the document is missing or `roles` is empty, it marks the request `failed` with the message "Set your search preferences first" and moves on to the next task.
-3. Lists every document in `applications` and builds a set of existing jobs by posting URL and by lowercase `company|role`. Skipped jobs count as existing, so they are never suggested again.
-4. Searches the web (LinkedIn, Indeed, JobStreet, Glassdoor, company career pages) for postings from the last 7 days that match your roles, locations or remote preference, level and salary floor. It drops postings that mention an excluded keyword or come from an excluded company, and prefers postings that mention your included keywords.
-5. Opens each candidate posting with `WebFetch` to confirm it is real, still open and has a working URL. It drops duplicates and jobs already in the tracker.
-6. Keeps up to `maxPerDay` of the best matches and creates them in `applications` in one batch, with `status` `listing`, `addedBy` `claude`, a `match` score, a `fit` sentence, and `datePosted` when the posting shows one.
-7. If it added any, creates one `listing` notification such as "4 new listings added".
-8. If a search request triggered the run, sets the request to `status` `done` with `finishedAt`, `added` (the number of new listings) and a short `message`. On an error it cannot recover from, it sets `status` `failed` with a short reason in `message` instead.
+2. Reads `settings/preferences`. If the document is missing or `roles` is empty, it marks the request (if any) `failed` with the message "Set your search preferences first" and moves on to the next task.
+3. Lists every document in `applications`, including skipped jobs, and builds a duplicate index with two keys per job: the normalized posting URL and the normalized `company|role`. See [Duplicate keys](data-model.md#duplicate-keys). Skipped jobs count as existing, so they are never suggested again.
+4. Gathers candidates from every source and records each source's outcome as `{name, status, found, note}`. `status` is `ok`, `empty`, `blocked` (HTTP 401, 403 or 429, a captcha, or a DNS failure) or `error`. It tries every source even when one is blocked:
+   - OnlineJobs.ph search pages, one search per role.
+   - The Remotive and Himalayas remote job feeds, keeping only jobs open to your locations (worldwide, Asia, APAC or your country).
+   - A web search for your roles, locations and level, covering LinkedIn, Indeed, JobStreet, Glassdoor, Kalibrr, company career pages and ATS pages such as Greenhouse, Lever, Workable and Ashby.
+5. Tries to open each candidate posting and classifies it as exactly one of:
+   - duplicate: matches the duplicate index or a candidate already accepted in this run.
+   - closed: the posting says it is closed, removed or no longer accepting applications.
+   - old: posted more than 7 days ago.
+   - mismatched: wrong level or location, mentions an excluded keyword, comes from an excluded company, or shows a salary below your floor.
+   - unverified: the posting could not be opened, but the search result clearly names a company, role and direct posting URL.
+   - good: open, posted within the last 7 days, and matches.
+6. Adds the best `good` candidates, up to `maxPerDay`, to `applications` in one batch, with `status` `listing`, `addedBy` `claude`, a `match` score, a `fit` sentence, and `datePosted` when the posting shows one.
+7. Picks up to 15 near misses: candidates that are old but posted within the last 60 days, mismatched on one rule only, or unverified. Each has a short `reason`, such as "Posted 34 days ago" or "Couldn't open to confirm it is still open". Duplicates and closed jobs are never near misses.
+8. If it added any, creates one `listing` notification such as "4 new listings added".
+9. Writes the result to `settings/searchRequest` on every listings run, whether or not a request triggered it: `status` `done` (or `failed` only if every source failed or an unrecoverable error occurred), `finishedAt`, `added`, a short `message`, and a `report` with the per-source outcomes, the counts from step 5 and the near misses. It keeps `requestedAt` as it is. The write is pinned to the document version and retried once on a conflict. The page shows this in its **Last search** block. The full shape is in [Data model](data-model.md#report).
 
 It never invents postings or details, and it sends no email.
+
+What to expect from the sources:
+
+- JobStreet and Indeed block automated access (HTTP 403) whatever the network setting, so they usually appear as `blocked` in the report.
+- The routine needs network access to open postings. Without it, most candidates cannot be verified and appear as unverified near misses rather than listings. See [Deployment](deployment.md#allow-network-access-to-job-sites).
 
 ## Reply checks
 
@@ -119,7 +134,7 @@ Definitions the summary uses, which match the page:
 6. Make sure the routine can use `ArtifactData`, `WebSearch` and `WebFetch`.
 7. Choose a cloud environment whose network access allows job sites (Full, or Custom with job board domains). See [Deployment](deployment.md#allow-network-access-to-job-sites).
 8. Save the routine and copy its URL (`<YOUR_ROUTINE_URL>`). Store it in `settings/schedule.routineUrl` as described in [Deployment](deployment.md#store-the-routine-url).
-9. Test it: select **Find jobs now** on the tracker, then select **Run now** on the routine page. Within a few minutes the line under **Find jobs now** should show the result.
+9. Test it: select **Find jobs now** on the tracker, then select **Run now** on the routine page. Within a few minutes the line under **Find jobs now** should show the result, and the **Last search** block should list each source with its outcome.
 
 ## Update the routine
 

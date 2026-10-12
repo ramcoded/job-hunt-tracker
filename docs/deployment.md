@@ -67,12 +67,16 @@ The routine reads the schedule at the start of every run, so changes apply from 
 
 ## Allow network access to job sites
 
-Routines run in a Claude Code cloud environment, and each environment has a network access setting. The listings search uses `WebFetch` to open each posting, so the environment must allow job sites:
+Routines run in a Claude Code cloud environment, and each environment has a network access setting. The listings search uses `WebFetch` to read the job feeds and to open each posting to verify it, so the environment must allow job sites:
 
 - Full: allows any site. This is the simplest choice.
-- Custom: allows only the domains you list. Add the job boards you want searched (for example LinkedIn, Indeed, JobStreet and Glassdoor) and any company career sites you care about.
+- Custom: allows only the domains you list. Add the sources the routine uses (`onlinejobs.ph`, `remotive.com`, `himalayas.app`), the job boards you want verified (for example LinkedIn, Glassdoor and Kalibrr), the ATS hosts that serve postings (for example Greenhouse, Lever, Workable and Ashby), and any company career sites you care about.
 
-If the environment blocks these sites, `WebFetch` cannot open postings and the listings task marks the search request `failed`. Choose or edit the environment when you create the routine at claude.ai/code/routines.
+If the environment blocks these sites, the routine cannot open postings to confirm they are real and still open. The search still finishes, but the sources show as Blocked or Error in the **Last search** report, and most results appear as unverified near misses instead of listings. If every source fails, the search request is marked `failed`.
+
+JobStreet and Indeed block automated access (HTTP 403) whatever the network setting, so allowing them does not help; they appear as Blocked in the report.
+
+Choose or edit the environment when you create the routine at claude.ai/code/routines.
 
 ## Create the routine
 
@@ -95,7 +99,7 @@ The URL must start with `https://`, or the page ignores it. Saving the Schedule 
 ## Check that it works
 
 1. On the Listings tab, select **Find jobs now**. The line under the button should read "Search requested just now. It runs at the next hourly check." followed by a **Run it now on claude.ai** link.
-2. Select the link and then **Run now** on the routine page. Within a few minutes the line should change to "Searching for jobs…" and then to a result such as "Last search 2m ago: 4 new listings". New cards should appear with an Added date, and the bell should show a "New listing" notification.
+2. Select the link and then **Run now** on the routine page. While the request is pending or running, a progress bar shows under the button. Within a few minutes the line should change to "Searching for jobs…" and then to a result such as "Last search 2m ago: 4 new listings". The **Last search** block should appear with the counts, each source and its outcome, and any near misses. New cards should appear with an Added date, and the bell should show a "New listing" notification.
 3. Select **Apply** on one card. It should move to the Applied tab with today's date.
 4. To test reply checks and the summary without waiting, open **Schedule**, set the reply window or the summary hour to include the current hour, save, and select **Run now** on the routine page again. With no replies, reply checks send nothing but set `lastEmailCheck` on each checked job. The summary sends one email from your own address and adds a "Daily summary" notification. Set the schedule back afterwards.
 
@@ -107,6 +111,9 @@ The URL must start with `https://`, or the page ignores it. Saving the Schedule 
 - No **Run it now on claude.ai** link: `settings/schedule.routineUrl` is not set or does not start with `https://`. See [Store the routine URL](#store-the-routine-url). The link only appears while a request is pending.
 - Search stays at "Search requested": the routine has not run since the request. Wait for the next hourly run, or open the routine and select **Run now**. Check that the routine exists and is enabled.
 - "Last search failed": read the message after it. "Set your search preferences first" means no job titles are saved. If the message says postings or sites could not be reached, the routine's cloud environment is blocking job sites; set its network access to Full, or Custom with the job board domains. See [Allow network access to job sites](#allow-network-access-to-job-sites).
-- No new listings after a successful search: check that your filters (level, salary floor, excluded keywords) are not too narrow. Some job sites block automated access, so results vary.
+- No new listings after a successful search: open the **Last search** block. High "Already tracked" means the matches are already in your tracker or skipped. High "Too old" or "Didn't match" means your filters (level, salary floor, excluded keywords) may be too narrow. Check the near misses and select **Add to Listings** for any you want.
+- Most sources show Blocked or Error, and most near misses say the posting could not be opened: the routine's cloud environment is blocking job sites. See [Allow network access to job sites](#allow-network-access-to-job-sites). JobStreet and Indeed always show as Blocked; that is expected.
+- "This job is already in your tracker" when adding a job: a job with the same posting URL (ignoring `www.`, query string, hash and trailing slash) or the same company and role already exists, possibly in Skipped or Applied. Select **Show it** to open it.
+- A listing you expected is missing from the Listings tab: if two listings are duplicates, the page shows only the newest. The older one is still stored.
 - Nothing happens at an hour you expected: check the schedule line under the page title. The hours are in the schedule's time zone, not your browser's. Runs outside the reply window and away from the listings and summary hours exit without doing anything.
 - No reply detected: reply checks only run inside the reply-check window, only check jobs in Applied, Responded, Interview or No reply, and only search by company name and the `contact` field. Add the recruiter's name or email to `contact` to improve matching.

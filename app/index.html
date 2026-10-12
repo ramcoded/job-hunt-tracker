@@ -124,6 +124,48 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .fstate.err { color: var(--s-rejected); }
 .fstate b { color: var(--ink); font-weight: 600; }
 .fstate .fhint { display: block; margin-top: 4px; }
+/* Indeterminate progress while a search is pending/running. Reduced motion: a static half-tone bar. */
+.fprog { flex-basis: 100%; position: relative; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.fprog::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 32%; border-radius: 2px; background: var(--accent); animation: fprog 1.6s ease-in-out infinite; }
+@keyframes fprog { from { transform: translateX(-100%); } to { transform: translateX(320%); } }
+
+/* Last-search report: summary always visible, sources + near misses collapse */
+.report { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); min-width: 0; }
+.rhead { display: flex; align-items: center; justify-content: space-between; gap: 0 16px; flex-wrap: wrap; padding: 0 16px; }
+.rhead h3 { margin: 0; font-size: 16px; font-weight: 700; }
+.rtoggle { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.rtoggle svg { width: 16px; height: 16px; color: var(--muted); transition: transform 0.15s ease; }
+.rtoggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.rtoggle:hover { text-decoration: underline; }
+.rtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+.rwhen { font-size: 14px; color: var(--muted); }
+.rsum { margin: 0; padding: 0 16px 12px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.rsum b { color: var(--ink); font: 500 14px var(--mono); }
+.rbody { border-top: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 24px; }
+.rsec h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.rsec .hint { margin: -4px 0 8px; }
+.srcs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.src { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r); font-size: 14px; overflow-wrap: anywhere; }
+.src .st { font-size: 12px; color: var(--muted); }
+.src .n { font: 500 12px var(--mono); color: var(--muted); }
+.src.empty .name { color: var(--muted); }
+.src.warn { --c: var(--s-responded); border-color: color-mix(in srgb, var(--c) 40%, var(--surface)); background: color-mix(in srgb, var(--c) 8%, var(--surface)); }
+.src.warn .st { color: var(--c); font-weight: 600; }
+.src .why { flex-basis: 100%; font-size: 12px; color: var(--ink); }
+.nm { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.nm > li { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.nm-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.nm-info p { margin: 0; overflow-wrap: anywhere; }
+.nm-title { font-size: 16px; }
+.nm-title strong { font-weight: 700; }
+.nm-meta, .nm-why { color: var(--muted); }
+.nm-why::before { content: "Filtered out: "; font-weight: 600; }
+.nm-err { color: var(--s-rejected); }
+.nm-acts { flex: none; display: flex; align-items: center; gap: 16px; }
+.nm-done { font-size: 14px; font-weight: 600; color: var(--muted); }
+.nm-done.added { color: var(--s-offer); }
+.nm-done:focus { outline: none; }
+.nm-more { margin-top: 12px; }
 
 /* Listing cards */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
@@ -234,6 +276,8 @@ textarea { min-height: 88px; resize: vertical; }
   .grid, .grid3 { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
+  .nm > li { flex-direction: column; align-items: stretch; }
+  .nm-acts { justify-content: space-between; }
   .head-actions { width: 100%; }
   .head-actions #addBtn { margin-left: auto; }
   .bellWrap { position: static; }
@@ -245,7 +289,10 @@ textarea { min-height: 88px; resize: vertical; }
   .btn.tool { width: 44px; padding: 0; }
   .btn.tool .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  .fprog::before { width: 100%; opacity: 0.5; }
+}
 </style>
 
 <div class="wrap">
@@ -299,7 +346,9 @@ textarea { min-height: 88px; resize: vertical; }
     <div class="finder" id="finder" hidden>
       <button class="btn" id="findBtn" type="button" data-key="find" aria-describedby="findState">Find jobs now</button>
       <p class="fstate" id="findState"></p>
+      <div class="fprog" id="findProg" hidden aria-hidden="true"></div>
     </div>
+    <section class="report" id="report" aria-labelledby="reportTitle" hidden></section>
     <div class="cards" id="cards"></div>
     <p class="empty" id="emptyListings" hidden></p>
   </section>
@@ -344,6 +393,7 @@ textarea { min-height: 88px; resize: vertical; }
       <label class="full">Notes<textarea id="f-notes" maxlength="4000"></textarea></label>
     </div>
     <ol class="history" id="f-history" hidden></ol>
+    <div class="note err" id="fErr" role="alert"></div>
     <div class="actions">
       <button class="btn danger" id="delBtn" type="button" hidden>Delete</button>
       <div>
@@ -440,6 +490,10 @@ let jobs = [], notifs = [], prefs = null, view = null, sub = "all", query = "", 
 let sched = null, schedLoaded = false, searchReq = null, searchErr = "";
 let col = null, ncol = null, pref = null, sref = null, sreq = null, editingId = null, loaded = false, panelOpen = false;
 let hl = null, hlTimer = null, toastTimer = null, toastUndo = false, returnKey = null;
+// Report UI state lives only in memory: open + collapsed near misses each time a new report arrives.
+let reportOpen = true, reportStamp = null, showAllMisses = false;
+const nmErr = new Map();
+const NEAR_MISS_LIMIT = 15;
 const busy = new Set();
 const $ = id => document.getElementById(id);
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -514,6 +568,70 @@ function snapData(snap) {
   const exists = typeof snap.exists === "function" ? snap.exists() : snap.exists;
   return (exists === false ? null : (snap.data && snap.data())) || null;
 }
+/* ---------- duplicates ---------- */
+const normText = s => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+// Two keys per job; a match on either one means duplicate.
+//   url: lowercase host without "www." + path without trailing slash (query string and hash dropped)
+//   cr:  "company|role", lowercased, punctuation stripped, whitespace collapsed
+function dedupeKey(j) {
+  const u = safeUrl(j && j.url);
+  let url = null;
+  if (u) { const x = new URL(u); url = (x.hostname.replace(/^www\./, "") + x.pathname.replace(/\/+$/, "")).toLowerCase(); }
+  const c = normText(j && j.company), r = normText(j && j.role);
+  return { url, cr: c && r ? c + "|" + r : null };
+}
+// Lookup over a job list: find(j) returns the first tracked job that duplicates j, or null.
+function dupIndex(list) {
+  const byUrl = new Map(), byCr = new Map();
+  for (const j of list) {
+    const k = dedupeKey(j);
+    if (k.url && !byUrl.has(k.url)) byUrl.set(k.url, j);
+    if (k.cr && !byCr.has(k.cr)) byCr.set(k.cr, j);
+  }
+  return { find: j => { const k = dedupeKey(j); return (k.url && byUrl.get(k.url)) || (k.cr && byCr.get(k.cr)) || null; } };
+}
+const newestFirst = (a, b) => String(b.dateFound || "").localeCompare(String(a.dateFound || "")) || String(b.lastUpdate || "").localeCompare(String(a.lastUpdate || ""));
+// Keep the newest of each duplicate cluster (display only; nothing is deleted).
+function uniqueNewest(list) {
+  const seen = new Set(), out = [];
+  for (const j of list.slice().sort(newestFirst)) {
+    const k = dedupeKey(j), ku = k.url && "u:" + k.url, kc = k.cr && "c:" + k.cr;
+    const dup = (ku && seen.has(ku)) || (kc && seen.has(kc));
+    if (ku) seen.add(ku); if (kc) seen.add(kc);
+    if (!dup) out.push(j);
+  }
+  return out;
+}
+
+/* ---------- search report (settings/searchRequest.report) ---------- */
+const str = v => typeof v === "string" ? v.trim() : typeof v === "number" && isFinite(v) ? String(v) : "";
+const count = v => { const n = Number(v); return v !== null && v !== "" && Number.isFinite(n) && n >= 0 ? Math.round(n) : 0; };
+const isDay = s => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
+const SRC_STATUS = { ok: "OK", blocked: "Blocked", error: "Error", empty: "No results" };
+function readReport(r) {
+  const rep = r && r.report;
+  if (!rep || typeof rep !== "object") return null;
+  const sources = (Array.isArray(rep.sources) ? rep.sources : [])
+    .filter(s => s && typeof s === "object" && str(s.name))
+    .map(s => ({ name: str(s.name), status: SRC_STATUS[s.status] ? s.status : null, found: count(s.found), note: str(s.note) }));
+  const nearMisses = (Array.isArray(rep.nearMisses) ? rep.nearMisses : [])
+    .filter(m => m && typeof m === "object" && (str(m.company) || str(m.role)))
+    .map(m => {
+      const n = Number(m.match);
+      return {
+        company: str(m.company), role: str(m.role), location: str(m.location), url: str(m.url),
+        source: str(m.source), salary: str(m.salary), datePosted: isDay(m.datePosted) ? m.datePosted : "",
+        match: m.match !== null && m.match !== "" && Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null,
+        reason: str(m.reason)
+      };
+    });
+  return {
+    sources, nearMisses,
+    found: count(rep.found), added: count(rep.added != null ? rep.added : r.added), duplicates: count(rep.duplicates),
+    closed: count(rep.closed), old: count(rep.old), mismatched: count(rep.mismatched)
+  };
+}
+
 function note(msg, err) { $("note").textContent = msg || ""; $("note").className = "note" + (err ? " err" : ""); }
 function normalize(d) {
   const j = { id: d.id, ...d.data() };
@@ -528,7 +646,8 @@ function derive() {
   return {
     q,
     match: j => !q || `${j.company || ""} ${j.role || ""} ${j.location || ""}`.toLowerCase().includes(q),
-    listings: jobs.filter(j => j.status === "listing"),
+    listings: uniqueNewest(jobs.filter(j => j.status === "listing")),
+    index: dupIndex(jobs),
     applied,
     skipped: jobs.filter(j => j.status === "skipped"),
     due: applied.filter(j => j.status === "applied" && !j.followedUp && daysSince(j.dateApplied) >= FOLLOW_UP_DAYS)
@@ -544,7 +663,7 @@ function render() {
   const inPanel = $("panel").contains(active);
   const d = derive();
   if (loaded && !view) view = d.listings.length ? "listings" : "applied";
-  renderHeader(d); renderFunnel(d); renderTabs(d); renderPrefs(); renderFinder(); renderListings(d); renderApplied(d); renderSkipped(d); renderPanel(d);
+  renderHeader(d); renderFunnel(d); renderTabs(d); renderPrefs(); renderFinder(); renderReport(d); renderListings(d); renderApplied(d); renderSkipped(d); renderPanel(d);
   if (focusKey && !(active && active.isConnected)) {
     const n = document.querySelector(`[data-key="${CSS.escape(focusKey)}"]`);
     if (n) n.focus({ preventScroll: true });
@@ -629,6 +748,7 @@ function renderFinder() {
   const active = (status === "pending" || status === "running") && !stale;
   btn.disabled = !hasPrefs() || sending || active;
   btn.textContent = sending ? "Requesting…" : status === "running" && active ? "Searching…" : "Find jobs now";
+  $("findProg").hidden = !(sending || active);
   let kids = [], err = false;
   const staleMsg = " No progress after 2 hours, so you can request it again.";
   if (searchErr) { kids = [searchErr]; err = true; }
@@ -644,10 +764,93 @@ function renderFinder() {
   else if (status === "done") {
     const n = Math.max(0, Number(r.added) || 0);
     kids = [`Last search ${ago(r.finishedAt || r.requestedAt)}: `, el("b", {}, plural(n, "new listing"))];
+    if (r.message) kids.push(` · ${r.message}`);
   }
   else if (status === "failed") { kids = [`Last search failed: ${r.message || "no details were given"}`]; err = true; }
   st.className = "fstate" + (err ? " err" : "");
   st.replaceChildren(...kids);
+}
+
+function chevron() {
+  const ns = "http://www.w3.org/2000/svg", s = document.createElementNS(ns, "svg"), p = document.createElementNS(ns, "path");
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2",
+    "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" })) s.setAttribute(k, v);
+  p.setAttribute("d", "m9 6 6 6-6 6"); s.append(p);
+  return s;
+}
+
+function renderReport(d) {
+  const box = $("report"), r = searchReq || {};
+  const rep = loaded && sreq && (r.status === "done" || r.status === "failed") ? readReport(r) : null;
+  box.hidden = !rep;
+  if (!rep) return box.replaceChildren();
+  // A new finished search reopens the block and re-collapses the near-miss list.
+  const stamp = `${r.status}|${r.finishedAt || ""}|${r.requestedAt || ""}`;
+  if (stamp !== reportStamp) { reportStamp = stamp; reportOpen = true; showAllMisses = false; nmErr.clear(); }
+
+  const parts = [["Found", rep.found, true], ["Added", rep.added, true], ["Already tracked", rep.duplicates],
+    ["Closed", rep.closed], ["Too old", rep.old], ["Didn't match", rep.mismatched]].filter(([, n, keep]) => keep || n > 0);
+  const summary = [];
+  parts.forEach(([label, n], i) => { if (i) summary.push(" · "); summary.push(label + " ", el("b", {}, n)); });
+
+  const when = r.finishedAt || r.requestedAt;
+  const head = el("div", { class: "rhead" },
+    el("h3", { id: "reportTitle" }, el("button", { class: "rtoggle", type: "button", "aria-expanded": String(reportOpen),
+      "aria-controls": "reportBody", "data-key": "report-toggle", onclick: () => { reportOpen = !reportOpen; render(); } },
+      chevron(), "Last search")),
+    when && agoTime(when) ? el("span", { class: "rwhen" }, `${r.status === "failed" ? "Failed" : "Finished"} ${ago(when)}`) : null);
+
+  const body = el("div", { class: "rbody", id: "reportBody", hidden: reportOpen ? null : "" });
+  if (rep.sources.length) body.append(el("section", { class: "rsec", "aria-labelledby": "rsrcTitle" },
+    el("h4", { id: "rsrcTitle" }, "Sources"),
+    el("ul", { class: "srcs" }, rep.sources.map(s => {
+      const warn = s.status === "blocked" || s.status === "error";
+      return el("li", { class: "src" + (warn ? " warn" : s.status === "empty" ? " empty" : "") },
+        el("span", { class: "name" }, s.name),
+        s.status && s.status !== "ok" ? el("span", { class: "st" }, SRC_STATUS[s.status]) : null,
+        el("span", { class: "n", "aria-label": `${s.found} found` }, s.found),
+        warn && s.note ? el("span", { class: "why" }, s.note) : null);
+    }))));
+
+  if (rep.nearMisses.length) {
+    const total = rep.nearMisses.length, shown = showAllMisses ? rep.nearMisses : rep.nearMisses.slice(0, NEAR_MISS_LIMIT);
+    body.append(el("section", { class: "rsec", "aria-labelledby": "rnmTitle" },
+      el("h4", { id: "rnmTitle" }, `Near misses (${total})`),
+      el("p", { class: "hint" }, "Close calls the search filtered out. Add any you still want to consider."),
+      el("ul", { class: "nm" }, shown.map((m, i) => nearMissRow(m, i, d))),
+      total > NEAR_MISS_LIMIT ? el("button", { class: "textbtn nm-more", type: "button", "data-key": "nm-all", "aria-expanded": String(showAllMisses),
+        onclick: () => { showAllMisses = !showAllMisses; render(); } }, showAllMisses ? "Show fewer" : `Show all ${total}`) : null));
+  }
+
+  box.replaceChildren(head, el("p", { class: "rsum" }, summary), body.childNodes.length ? body : null);
+  if (!body.childNodes.length) head.querySelector(".rtoggle").replaceWith(el("span", {}, "Last search"));
+}
+
+function nearMissRow(m, i, d) {
+  const k = dedupeKey(m), id = k.url || k.cr || "i" + i, bk = "nm:" + id;
+  const dup = d.index.find(m), url = safeUrl(m.url), b = busy.has(bk);
+  const name = m.company || "Untitled";
+  const meta = [m.location, m.salary, m.datePosted && `Posted ${fmtDate(m.datePosted)} (${agoDays(m.datePosted)})`,
+    m.source && `via ${m.source}`, m.match != null && `${Math.round(m.match)}% match`].filter(Boolean).join(" · ");
+  let action;
+  if (dup) {
+    // "Added" when the tracked copy came from a near miss; otherwise it was already there.
+    const added = String(dup.fit || "").startsWith("Near miss: ");
+    action = el("span", { class: "nm-done" + (added ? " added" : ""), tabindex: "-1", "data-key": "nm-add:" + id },
+      added ? "Added" : `Already in your tracker (${LABEL[dup.status] || dup.status || "Listing"})`);
+  } else {
+    action = el("button", { class: "btn small", type: "button", "data-key": "nm-add:" + id, disabled: b ? "" : null,
+      "aria-label": `Add ${m.role || "role"} at ${name} to Listings`, onclick: () => addNearMiss(m, bk) }, b ? "Adding…" : "Add to Listings");
+  }
+  return el("li", {},
+    el("div", { class: "nm-info" },
+      el("p", { class: "nm-title" }, el("strong", {}, name), m.role ? ` · ${m.role}` : ""),
+      meta ? el("p", { class: "nm-meta" }, meta) : null,
+      m.reason ? el("p", { class: "nm-why" }, m.reason) : null,
+      nmErr.has(bk) ? el("p", { class: "nm-err", role: "alert" }, nmErr.get(bk)) : null),
+    el("div", { class: "nm-acts" },
+      url ? el("a", { class: "open", href: url, target: "_blank", rel: "noopener noreferrer", "aria-label": `View posting for ${name} (new tab)` }, "View ↗") : el("span"),
+      action));
 }
 
 function renderListings(d) {
@@ -807,6 +1010,23 @@ async function requestSearch() {
   finally { busy.delete("search"); render(); }
 }
 $("findBtn").addEventListener("click", requestSearch);
+
+async function addNearMiss(m, bk) {
+  if (!col) return note("Saving isn't available in this view.", true);
+  nmErr.delete(bk);
+  // The row re-renders as "Already in your tracker" once it sees the duplicate.
+  if (dupIndex(jobs).find(m)) return render();
+  busy.add(bk); render();
+  try {
+    await col.add({
+      company: m.company, role: m.role, location: m.location, url: m.url, source: m.source, salary: m.salary,
+      datePosted: m.datePosted || null, match: m.match, fit: "Near miss: " + (m.reason || "flagged by the search"),
+      status: "listing", history: [], dateFound: today(), lastUpdate: today(), addedBy: "user"
+    });
+    toast(`Added ${m.company || m.role} to Listings`);
+  } catch { nmErr.set(bk, "Couldn't add this job. Try again in a moment."); }
+  finally { busy.delete(bk); render(); }
+}
 async function restore(j) { if (await patch(j, statusChange(j, "listing"))) toast(`Restored ${co(j)} to Listings`); }
 
 async function markRead(n) {
@@ -828,8 +1048,9 @@ $("markAll").addEventListener("click", async () => {
 function toast(msg, undo) {
   const t = $("toast");
   toastUndo = !!undo;
-  t.replaceChildren(el("span", {}, msg), undo ? el("button", { class: "btn small", type: "button",
-    onclick: () => { hideToast(); undo(); } }, "Undo") : null);
+  const kids = [el("span", {}, msg)];
+  if (undo) kids.push(el("button", { class: "btn small", type: "button", onclick: () => { hideToast(); undo(); } }, "Undo"));
+  t.replaceChildren(...kids);
   t.hidden = false;
   armToast(undo ? 8000 : 5000);
 }
@@ -917,6 +1138,7 @@ function openEditor(j) {
   F("status").value = j?.status || "listing";
   F("applied").value = j?.dateApplied || "";
   F("posted").value = /^\d{4}-\d{2}-\d{2}$/.test(j?.datePosted || "") ? j.datePosted : "";
+  $("fErr").replaceChildren();
   const del = $("delBtn"); del.hidden = !j; del.textContent = "Delete"; del.dataset.armed = ""; del.disabled = false;
   const h = $("f-history");
   const hist = Array.isArray(j?.history) ? j.history : [];
@@ -941,6 +1163,18 @@ $("form").addEventListener("submit", async e => {
     dateApplied: F("applied").value || null, datePosted: F("posted").value || null, lastUpdate: today()
   };
   const status = F("status").value;
+  const err = $("fErr");
+  err.replaceChildren();
+  if (!editingId) {
+    const dup = dupIndex(jobs).find(data);
+    if (dup) {
+      err.replaceChildren(
+        `This job is already in your tracker (status: ${LABEL[dup.status] || dup.status || "Listing"}). `,
+        el("strong", {}, co(dup)), dup.role ? ` · ${dup.role} ` : " ",
+        el("button", { class: "textbtn", type: "button", onclick: () => { returnKey = null; $("dlg").close(); jumpTo(dup.id); } }, "Show it"));
+      return;
+    }
+  }
   $("saveBtn").disabled = true;
   try {
     if (editingId) {
@@ -951,7 +1185,7 @@ $("form").addEventListener("submit", async e => {
       await col.add({ ...data, ...statusChange({ dateApplied: data.dateApplied }, status), dateFound: today(), addedBy: "user" });
     }
     $("dlg").close(); note("");
-  } catch { note("Couldn't save this job. Check the fields and try again.", true); }
+  } catch { err.textContent = "Couldn't save this job. Check the fields and try again."; }
   finally { $("saveBtn").disabled = false; }
 });
 

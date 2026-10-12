@@ -5,7 +5,10 @@ Job Hunt Tracker is a single-page job search tracker that runs as a private clau
 ## Features
 
 - Listings view: job cards with match score, "why it fits" note, Added and Posted dates, and Apply / Skip buttons.
-- Find jobs now: ask for a listings search on demand instead of waiting for the daily search.
+- Find jobs now: ask for a listings search on demand instead of waiting for the daily search. A progress bar shows while the search is requested or running.
+- Multi-source listings search: OnlineJobs.ph, the Remotive and Himalayas remote job feeds, and a web search that covers LinkedIn, Indeed, JobStreet, Glassdoor, Kalibrr, company career pages and applicant tracking system (ATS) pages.
+- Last search report: which sources worked, how many candidates were found, added, already tracked, closed, too old or mismatched, and up to 15 near misses you can add with **Add to Listings**.
+- Duplicate protection: the search never suggests a job you already track or skipped, the Listings view shows only the newest copy of a duplicated job, and the page refuses to add a duplicate by hand or from a near miss.
 - Applied view: a table of every application with a status picker (Applied, Responded, Interview, Offer, Rejected, No reply) and status filter chips.
 - Pipeline strip: counts and rates for Applied, Responded, Interview and Offer.
 - Follow-up reminders: any job still in Applied 7 or more days after you applied shows up under the bell.
@@ -37,7 +40,7 @@ flowchart LR
   db[(Artifact database<br/>applications, notifications,<br/>settings/preferences,<br/>settings/schedule,<br/>settings/searchRequest)]
   routine[Routine: hourly check<br/>routines/hourly-check.md<br/>every hour]
   due{What is due<br/>this hour?}
-  web[Public job pages<br/>and search]
+  web[Job sources:<br/>OnlineJobs.ph, Remotive,<br/>Himalayas, web search]
   gmail[Your Gmail<br/>via claude.ai connector]
   stop([Nothing due: exit])
 
@@ -50,6 +53,8 @@ flowchart LR
   due -->|reply checks, summary email| gmail
   due --> stop
 ```
+
+A listings run gathers candidates from every source, records how each source did, and opens each posting to classify it as a duplicate, closed, old, mismatched, unverified or good. It adds the good ones as listings and keeps up to 15 near misses (old, mismatched on one rule, or unverified). It writes the outcome to `settings/searchRequest.report` on every listings run, scheduled or requested, and the page shows it in the **Last search** block.
 
 More detail:
 
@@ -84,6 +89,8 @@ More detail:
 
 ## Usage
 
+- Review the last search: the **Last search** block on the Listings tab shows when the last listings run finished and its counts (Found, Added, and when non-zero Already tracked, Closed, Too old and Didn't match). Expand it to see each source with its result (No results, Blocked or Error are labelled, with a note for blocked or failed sources) and the near misses.
+- Add a near miss: in **Last search**, under **Near misses**, select **Add to Listings**. The job is added as a listing with its "why it fits" note set to "Near miss: <reason>". If the job is already tracked, the row shows "Already in your tracker" with its status instead of the button. The first 15 near misses show; select **Show all** if there are more.
 - Review new listings: open the Listings tab. Each card shows the company, role, the date it was added and, when known, the date it was posted, plus location, salary, match score and why it fits. Select **View posting** to read the original.
 - Find jobs now: on the Listings tab, select **Find jobs now**. The routine picks up the request at its next hourly run. For results in a few minutes, select **Run it now on claude.ai**, then select **Run now** on the routine page. The line under the button shows whether the search is requested, running, done (with the number of new listings) or failed. The button is disabled until you save search preferences, and while a request is pending or running. A request with no progress after 2 hours can be made again.
 - Apply to a job: select **Apply** on a card. The posting opens in a new tab, and the card moves to Applied. The applied date is set to today only if the job does not already have one. You still submit the application yourself on the employer's site. Select **Undo** in the toast to move it back.
@@ -92,7 +99,7 @@ More detail:
 - Handle follow-ups: open the bell. Under **Follow-ups due**, select **Mark followed up** after you chase an employer, or **No reply** to mark the job as ghosted.
 - Read notifications: open the bell and select a notification to mark it read and jump to the job it refers to. **Mark all read** clears the unread count.
 - Change when Claude runs: select **Schedule**. The current schedule is shown under the page title.
-- Add a job by hand: select **Add job**, fill in at least Company and Role, choose a status, and select **Save**.
+- Add a job by hand: select **Add job**, fill in at least Company and Role, choose a status, and select **Save**. If the job matches one already in the tracker (same posting URL, or same company and role), the form shows "This job is already in your tracker" with a **Show it** link and does not save.
 - Edit or delete a job: select the company name on a card or table row. To delete, select **Delete** and then **Click again to delete**.
 - Search: type in the search box to filter by company, role or location.
 
@@ -138,6 +145,9 @@ The document also holds `routineUrl`, which the dialog does not show. You or Cla
 
 ### Fixed settings
 
+- Duplicate matching: two jobs are the same if either key matches. The URL key is the host without `www.` plus the path without a trailing slash, lowercased, with the query string and hash removed. The name key is `company|role`, lowercased, with punctuation removed and spaces collapsed.
+- Near misses: the routine saves up to 15 per run.
+
 - Follow-up reminder delay: 7 days (`FOLLOW_UP_DAYS` in `app/index.html`).
 - Re-request window for a stuck search: 2 hours (`SEARCH_STALE_MS` in `app/index.html`).
 - The routine itself runs every hour. Only what it does each hour is configurable from the page.
@@ -165,7 +175,9 @@ job-tracker/
 - Nothing is instant. The routine runs once an hour (the minimum routine interval), and the scheduler may start it some minutes past the hour (for example at :08). A reply can take about an hour to appear, and replies that arrive outside your reply-check window show up at the next check inside it.
 - **Find jobs now** only records a request. Unless you run the routine by hand, results arrive at the next hourly run.
 - Schedule hours are whole hours only. You cannot pick 8:30.
-- The listings search depends on which job pages Claude can reach. If the routine's cloud environment blocks job sites, the search fails. Even with access, some job boards block automated access or require sign-in, so results vary and may miss postings you would find yourself.
+- The listings search depends on which job pages Claude can reach. If the routine's cloud environment has no network access to job sites, Claude cannot open postings to verify them, so most results appear as unverified near misses instead of listings.
+- JobStreet and Indeed block automated access (HTTP 403) whatever the network setting, so they usually show as Blocked in the report. Other boards may block access or require sign-in too, so results vary and may miss postings you would find yourself.
+- Duplicate matching is by URL and by company and role name. The same job posted under a different URL and a differently worded title is not detected. The page hides older duplicate listings from view but does not delete them.
 - Claude cannot submit applications. **Apply** only opens the posting in a new tab and moves the card to Applied.
 - Routine emails are sent from your own Gmail account to your own address, so they appear as messages from yourself.
 - Dates written by the page use your browser's local date, while the routine uses the time zone from the schedule. If they differ, "today" can differ between the page and the summary email around midnight.

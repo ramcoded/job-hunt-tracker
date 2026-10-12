@@ -31,12 +31,27 @@ Run the due tasks in this order: Listings, Updates, Summary.
 
 1. If this run was triggered by a pending request, update `settings/searchRequest` (pinned with `if_version`): `status` "running", `startedAt` now (ISO 8601 UTC).
 2. ArtifactData `get` collection `settings`, doc `preferences`. Fields: `roles`, `locations`, `remoteOk`, `level`, `salaryMin`, `salaryCurrency`, `includeKeywords`, `excludeKeywords`, `excludeCompanies`, `maxPerDay` (default 10). If it is missing or `roles` is empty, mark the request (if any) `failed` with `message` "Set your search preferences first" and skip to the next task.
-3. ArtifactData `list` collection `applications` (all pages). Build a set of existing jobs by posting URL and by lowercase "company|role". Skipped jobs count as existing: never suggest them again.
-4. Search the web (LinkedIn, Indeed, JobStreet, Glassdoor, company career pages) for openings posted in the last 7 days that match the roles and locations (or remote, if `remoteOk`), the level, and the salary floor when a salary is posted. Exclude anything mentioning an `excludeKeywords` term or at an `excludeCompanies` company. Prefer postings mentioning `includeKeywords`.
-5. Open each candidate posting to confirm it is real, still open, and has a working URL. Drop duplicates and anything already in the tracker.
-6. Keep at most `maxPerDay` of the best matches. Create one document per job in `applications` (one `batch` call): `company`, `role`, `location`, `url`, `source` (site name), `salary` (as posted, or empty), `datePosted` (YYYY-MM-DD as shown on the posting, omit if not shown), `match` (0-100, honest fit estimate), `fit` (one or two sentences on why it fits), `status` "listing", `history` [], `dateFound` today, `lastUpdate` today, `addedBy` "claude".
-7. If any were added, create one `notifications` document: `type` "listing", `text` "<n> new listings added", `createdAt` now (ISO 8601 UTC), `read` false.
-8. If a request was being handled, update `settings/searchRequest`: `status` "done", `finishedAt` now, `added` n, `message` a short note (for example "No new matches found" when n is 0). On an error you cannot recover from, set `status` "failed" and `message` a short reason instead.
+3. ArtifactData `list` collection `applications` (all pages), every status including `skipped`. Build the duplicate index. A job's keys are:
+   - URL key: lowercase host without "www.", path without trailing slash, with the query string and hash removed.
+   - Name key: "company|role", lowercased, punctuation removed, whitespace collapsed.
+   A candidate is a duplicate if either key matches an existing job or a candidate already accepted in this run. Skipped jobs count as existing: never suggest them again.
+4. Gather candidates from every source below and record, per source, `{name, status, found, note}` where status is "ok", "empty", "blocked" (HTTP 401/403/429, captcha, DNS failure) or "error":
+   - OnlineJobs.ph search pages, for example `https://www.onlinejobs.ph/jobseekers/jobsearch?jobkeyword=<role>` for each role.
+   - Remote job feeds: `https://remotive.com/api/remote-jobs?category=software-dev&search=<keyword>` and `https://himalayas.app/jobs/api?q=<keyword>`. Keep only jobs open to the owner's locations (worldwide, Asia, APAC or the owner's country).
+   - Web search for the roles, locations and level (LinkedIn, Indeed, JobStreet, Glassdoor, Kalibrr, company career pages and ATS pages such as Greenhouse, Lever, Workable, Ashby).
+   Do not stop at the first blocked source; try them all.
+5. For each candidate, try to open the posting. Classify it as exactly one of:
+   - duplicate: matches the duplicate index.
+   - closed: the posting says it is closed, removed or no longer accepting applications.
+   - old: posted more than 7 days ago (record `datePosted`).
+   - mismatched: wrong level, location, an `excludeKeywords` term, an `excludeCompanies` company, or a posted salary below `salaryMin`.
+   - unverified: the posting could not be opened (blocked or error) but the search result clearly names a company, role and a direct posting URL.
+   - good: open, posted within 7 days, and matches.
+6. Add the best `good` candidates, at most `maxPerDay`. Create one document per job in `applications` (one `batch` call): `company`, `role`, `location`, `url`, `source` (site name), `salary` (as posted, or empty), `datePosted` (YYYY-MM-DD as shown on the posting, omit if not shown), `match` (0-100, honest fit estimate), `fit` (one or two sentences on why it fits), `status` "listing", `history` [], `dateFound` today, `lastUpdate` today, `addedBy` "claude".
+7. Near misses: the best up to 15 candidates classified old (posted within the last 60 days), mismatched on one rule only, or unverified. Never include duplicates or closed jobs. Each near miss: `company`, `role`, `location`, `url`, `source`, `salary`, `datePosted`, `match`, and `reason`, one short phrase such as "Posted 34 days ago", "Part-time", "Salary below 30,000 PHP" or "Couldn't open to confirm it is still open".
+8. If any were added, create one `notifications` document: `type` "listing", `text` "<n> new listings added", `createdAt` now (ISO 8601 UTC), `read` false.
+9. Write the result to `settings/searchRequest` on every listings run, whether or not it was triggered by a request (pinned with `if_version`; re-read and retry once on a version mismatch): `status` "done" (or "failed" only if every source failed or an unrecoverable error occurred), `finishedAt` now, `added` n, `message` one short sentence (for example "Added 4 new listings" or "No new matches; 6 near misses below"), and `report`:
+   `{sources: [...], found, added, duplicates, closed, old, mismatched, nearMisses: [...]}` with the counts from step 5. Keep `requestedAt` as it is.
 
 ### Task B: application updates
 
