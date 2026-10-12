@@ -39,6 +39,8 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 .head-actions { display: flex; gap: 8px; align-items: center; }
+.sched { margin: 4px 0 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.sched strong { color: var(--ink); font-weight: 600; }
 
 .btn { font: inherit; font-size: 14px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--r); padding: 8px 16px; cursor: pointer; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .btn:hover { background: var(--hover); }
@@ -115,6 +117,13 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .prompt { border: 1px dashed var(--line); border-radius: var(--r); padding: 16px; display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .prompt h3 { margin: 0; font-size: 16px; }
 .prompt p { margin: 4px 0 0; color: var(--muted); font-size: 14px; max-width: 60ch; }
+.finder { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.finder .btn { flex: none; }
+.fstate { margin: 0; font-size: 14px; color: var(--muted); min-width: 0; flex: 1 1 260px; overflow-wrap: anywhere; }
+.fstate:empty { display: none; }
+.fstate.err { color: var(--s-rejected); }
+.fstate b { color: var(--ink); font-weight: 600; }
+.fstate .fhint { display: block; margin-top: 4px; }
 
 /* Listing cards */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; }
@@ -127,6 +136,8 @@ h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: 
 .score b { display: block; font: 500 20px/1.2 var(--mono); }
 .score small { font-size: 12px; color: var(--muted); }
 .meta { margin: 0; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.dates { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; color: var(--muted); }
+.dates b { color: var(--ink); font-weight: 600; }
 .fit { margin: 0; font-size: 14px; padding-left: 12px; border-left: 2px solid var(--line); overflow-wrap: anywhere; }
 .fit span { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
 .card-sub { margin: auto 0 0; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
@@ -185,6 +196,15 @@ form h2 { font-size: 20px; text-transform: none; letter-spacing: 0; color: var(-
 .hint { margin: -8px 0 0; font-size: 14px; color: var(--muted); }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
 .grid .full { grid-column: 1 / -1; }
+.grid3 { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+.srows { border: 1px solid var(--line); border-radius: var(--r); }
+.srow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; padding: 8px 16px; }
+.srow + .srow { border-top: 1px solid var(--line); }
+.srow .hint { flex-basis: 100%; margin: 0 0 8px; }
+.hours { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 14px; color: var(--muted); }
+.hours .pair { display: inline-flex; align-items: center; gap: 8px; }
+.hours select { width: auto; }
+.hours select:disabled { opacity: 0.55; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: var(--muted); min-width: 0; }
 label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--ink); font-weight: 500; min-height: 44px; }
 label.check input { width: 20px; height: 20px; accent-color: var(--accent); }
@@ -211,7 +231,7 @@ textarea { min-height: 88px; resize: vertical; }
   td.c-job { grid-column: 1; } td.c-status { grid-column: 2; grid-row: 1; justify-self: end; }
   td.c-applied, td.c-match, td.c-source, td.c-link { grid-column: 1 / -1; }
   td:empty { display: none; }
-  .grid { grid-template-columns: 1fr; }
+  .grid, .grid3 { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
   .head-actions { width: 100%; }
@@ -219,6 +239,11 @@ textarea { min-height: 88px; resize: vertical; }
   .bellWrap { position: static; }
   .panel { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 85dvh; border-radius: 8px 8px 0 0; border-bottom: 0; box-shadow: none; }
   .scrim { background: var(--scrim); }
+}
+/* Four header controls don't fit at phone width: Preferences and Schedule collapse to icon buttons (label stays for screen readers). */
+@media (max-width: 440px) {
+  .btn.tool { width: 44px; padding: 0; }
+  .btn.tool .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
@@ -228,9 +253,15 @@ textarea { min-height: 88px; resize: vertical; }
     <div>
       <h1>Job Hunt Tracker</h1>
       <p class="sub" id="sub">Loading your jobs…</p>
+      <p class="sched" id="schedLine" hidden></p>
     </div>
     <div class="head-actions">
-      <button class="btn" id="prefsBtn" type="button">Preferences</button>
+      <button class="btn tool" id="prefsBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg><span class="lbl">Preferences</span>
+      </button>
+      <button class="btn tool" id="schedBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="lbl">Schedule</span>
+      </button>
       <div class="bellWrap">
         <button class="iconbtn" id="bell" type="button" aria-expanded="false" aria-controls="panel" aria-label="Notifications">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
@@ -265,6 +296,10 @@ textarea { min-height: 88px; resize: vertical; }
 
   <section class="view" id="view-listings" role="tabpanel" aria-labelledby="tab-listings">
     <div id="prefsLine"></div>
+    <div class="finder" id="finder" hidden>
+      <button class="btn" id="findBtn" type="button" data-key="find" aria-describedby="findState">Find jobs now</button>
+      <p class="fstate" id="findState"></p>
+    </div>
     <div class="cards" id="cards"></div>
     <p class="empty" id="emptyListings" hidden></p>
   </section>
@@ -299,8 +334,11 @@ textarea { min-height: 88px; resize: vertical; }
       <label class="full">Job link<input id="f-url" type="url" placeholder="https://"></label>
       <label>Source<input id="f-source" maxlength="60" placeholder="LinkedIn, company site, referral…"></label>
       <label>Salary<input id="f-salary" maxlength="60"></label>
-      <label>Match %<input id="f-match" type="number" min="0" max="100" inputmode="numeric"></label>
-      <label>Date applied<input id="f-applied" type="date"></label>
+      <div class="grid3">
+        <label>Match %<input id="f-match" type="number" min="0" max="100" inputmode="numeric"></label>
+        <label>Date posted<input id="f-posted" type="date"></label>
+        <label>Date applied<input id="f-applied" type="date"></label>
+      </div>
       <label class="full">Why it fits<textarea id="f-fit" maxlength="600" placeholder="One or two lines on why this role suits you"></textarea></label>
       <label class="full">Contact<input id="f-contact" maxlength="160" placeholder="Recruiter name, email"></label>
       <label class="full">Notes<textarea id="f-notes" maxlength="4000"></textarea></label>
@@ -335,10 +373,44 @@ textarea { min-height: 88px; resize: vertical; }
       <label class="full">Skip if it mentions<input id="p-excludeKeywords" maxlength="400" placeholder="PHP, night shift"></label>
       <label class="full">Skip these companies<input id="p-excludeCompanies" maxlength="400"></label>
     </div>
+    <p class="note err" id="pErr" role="alert"></p>
     <div class="actions">
       <div>
         <button class="btn" id="pCancel" type="button">Cancel</button>
         <button class="btn primary" id="pSave" type="submit">Save preferences</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="sdlg" aria-labelledby="sdlgTitle">
+  <form id="sform" method="dialog">
+    <h2 id="sdlgTitle">Schedule</h2>
+    <p class="hint">When Claude checks for replies, finds new listings and sends your daily summary. Checks run on the hour. Changes apply from the next hour.</p>
+    <label>Time zone<select id="s-timezone"></select></label>
+    <div class="srows">
+      <div class="srow">
+        <label class="check"><input id="s-updatesEnabled" type="checkbox"> Check for replies every hour</label>
+        <div class="hours">
+          <span class="pair"><span aria-hidden="true">from</span><select id="s-updatesFrom" aria-label="First reply check" aria-describedby="s-rangeHint"></select></span>
+          <span class="pair"><span aria-hidden="true">to</span><select id="s-updatesTo" aria-label="Last reply check" aria-describedby="s-rangeHint"></select></span>
+        </div>
+        <p class="hint" id="s-rangeHint"></p>
+      </div>
+      <div class="srow">
+        <label class="check"><input id="s-listingsEnabled" type="checkbox"> Find new listings daily</label>
+        <div class="hours"><span class="pair"><span aria-hidden="true">at</span><select id="s-listingsHour" aria-label="Listing search time"></select></span></div>
+      </div>
+      <div class="srow">
+        <label class="check"><input id="s-summaryEnabled" type="checkbox"> Send a daily summary</label>
+        <div class="hours"><span class="pair"><span aria-hidden="true">at</span><select id="s-summaryHour" aria-label="Daily summary time"></select></span></div>
+      </div>
+    </div>
+    <p class="note err" id="sErr" role="alert"></p>
+    <div class="actions">
+      <div>
+        <button class="btn" id="sCancel" type="button">Cancel</button>
+        <button class="btn primary" id="sSave" type="submit">Save schedule</button>
       </div>
     </div>
   </form>
@@ -358,9 +430,15 @@ const NTYPE = { listing: "New listing", reply: "Reply", status: "Status change",
 const LEVEL = { entry: "Entry", mid: "Mid", senior: "Senior", lead: "Lead" };
 const FOLLOW_UP_DAYS = 7;
 const PREF_LISTS = ["roles", "locations", "includeKeywords", "excludeKeywords", "excludeCompanies"];
+const SCHED_DEFAULTS = { timezone: "Asia/Shanghai", updatesEnabled: true, updatesFrom: 8, updatesTo: 23,
+  listingsEnabled: true, listingsHour: 8, summaryEnabled: true, summaryHour: 21 };
+const TIMEZONES = ["Asia/Shanghai", "Asia/Manila", "Asia/Singapore", "Asia/Tokyo", "Asia/Kolkata", "Europe/London",
+  "Europe/Berlin", "America/New_York", "America/Chicago", "America/Los_Angeles", "UTC"];
+const SEARCH_STALE_MS = 2 * 3600e3; // a pending/running request older than this can be re-requested
 
 let jobs = [], notifs = [], prefs = null, view = null, sub = "all", query = "", showSkipped = false;
-let col = null, ncol = null, pref = null, editingId = null, loaded = false, panelOpen = false;
+let sched = null, schedLoaded = false, searchReq = null, searchErr = "";
+let col = null, ncol = null, pref = null, sref = null, sreq = null, editingId = null, loaded = false, panelOpen = false;
 let hl = null, hlTimer = null, toastTimer = null, toastUndo = false, returnKey = null;
 const busy = new Set();
 const $ = id => document.getElementById(id);
@@ -385,6 +463,32 @@ function agoTime(iso) {
   const d = Math.round(h / 24); if (d === 1) return "Yesterday"; if (d < 7) return d + "d ago";
   return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+// Same as agoTime, but reads naturally mid-sentence ("requested just now").
+function ago(iso) { const s = agoTime(iso); return s === "Just now" || s === "Yesterday" ? s.toLowerCase() : s || "a while ago"; }
+function hourLabel(h, long) { const n = h % 12 || 12, ap = h < 12 ? "AM" : "PM"; return long ? `${n}:00 ${ap}` : `${n} ${ap}`; }
+function validHour(v, d) { const n = Number(v); return v !== null && v !== "" && Number.isInteger(n) && n >= 0 && n <= 23 ? n : d; }
+function schedule() {
+  const s = sched || {}, D = SCHED_DEFAULTS, bool = (v, d) => typeof v === "boolean" ? v : d;
+  return {
+    timezone: typeof s.timezone === "string" && s.timezone.trim() ? s.timezone.trim() : D.timezone,
+    updatesEnabled: bool(s.updatesEnabled, D.updatesEnabled),
+    updatesFrom: validHour(s.updatesFrom, D.updatesFrom), updatesTo: validHour(s.updatesTo, D.updatesTo),
+    listingsEnabled: bool(s.listingsEnabled, D.listingsEnabled), listingsHour: validHour(s.listingsHour, D.listingsHour),
+    summaryEnabled: bool(s.summaryEnabled, D.summaryEnabled), summaryHour: validHour(s.summaryHour, D.summaryHour)
+  };
+}
+function schedSummary(s) {
+  const replies = !s.updatesEnabled ? "Replies off"
+    : s.updatesFrom === s.updatesTo ? `Replies daily ${hourLabel(s.updatesFrom)}`
+    : `Replies hourly ${hourLabel(s.updatesFrom)}–${hourLabel(s.updatesTo)}`;
+  return `${replies} · Listings ${s.listingsEnabled ? hourLabel(s.listingsHour) : "off"} · Summary ${s.summaryEnabled ? hourLabel(s.summaryHour) : "off"} (${s.timezone})`;
+}
+function tzLabel(tz) {
+  let off = "";
+  try { off = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" }).formatToParts(new Date()).find(p => p.type === "timeZoneName")?.value || ""; } catch { off = ""; }
+  const name = tz.replace(/_/g, " ");
+  return off && off !== tz ? `${name} (${off})` : name;
+}
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const co = j => j.company || "Untitled";
 const hasMatch = j => j.match != null && j.match !== "" && !isNaN(Number(j.match));
@@ -404,6 +508,11 @@ function reached(j, keys) {
 }
 function safeUrl(u) {
   try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; } catch { return null; }
+}
+function safeHttps(u) { const s = safeUrl(u); return s && s.startsWith("https:") ? s : null; }
+function snapData(snap) {
+  const exists = typeof snap.exists === "function" ? snap.exists() : snap.exists;
+  return (exists === false ? null : (snap.data && snap.data())) || null;
 }
 function note(msg, err) { $("note").textContent = msg || ""; $("note").className = "note" + (err ? " err" : ""); }
 function normalize(d) {
@@ -435,7 +544,7 @@ function render() {
   const inPanel = $("panel").contains(active);
   const d = derive();
   if (loaded && !view) view = d.listings.length ? "listings" : "applied";
-  renderHeader(d); renderFunnel(d); renderTabs(d); renderPrefs(); renderListings(d); renderApplied(d); renderSkipped(d); renderPanel(d);
+  renderHeader(d); renderFunnel(d); renderTabs(d); renderPrefs(); renderFinder(); renderListings(d); renderApplied(d); renderSkipped(d); renderPanel(d);
   if (focusKey && !(active && active.isConnected)) {
     const n = document.querySelector(`[data-key="${CSS.escape(focusKey)}"]`);
     if (n) n.focus({ preventScroll: true });
@@ -449,6 +558,8 @@ function renderHeader(d) {
   $("sub").textContent = !loaded ? "Loading your jobs…"
     : !jobs.length ? "Nothing tracked yet"
     : [plural(d.listings.length, "new listing"), `${d.applied.length} applied`, pct && `${pct} response rate`].filter(Boolean).join(" · ");
+  $("schedLine").hidden = !schedLoaded;
+  if (schedLoaded) $("schedLine").replaceChildren(el("strong", {}, "Schedule: "), schedSummary(schedule()));
   const n = d.unread.length + d.due.length;
   $("badge").hidden = n === 0;
   $("badge").textContent = n > 99 ? "99+" : n;
@@ -486,7 +597,8 @@ function renderTabs(d) {
   }
 }
 
-function hasPrefs() { return !!prefs && PREF_LISTS.some(k => Array.isArray(prefs[k]) && prefs[k].length); }
+// The search needs at least one job title; other fields only narrow it.
+function hasPrefs() { return !!prefs && Array.isArray(prefs.roles) && prefs.roles.some(Boolean); }
 function renderPrefs() {
   const box = $("prefsLine");
   if (!loaded) return box.replaceChildren();
@@ -507,9 +619,41 @@ function renderPrefs() {
     el("button", { class: "textbtn", type: "button", "data-key": "prefs-edit", onclick: openPrefs, "aria-label": "Edit search preferences" }, "Edit")));
 }
 
+function renderFinder() {
+  const box = $("finder"), btn = $("findBtn"), st = $("findState");
+  box.hidden = !loaded || !sreq;
+  if (box.hidden) return;
+  const r = searchReq || {}, status = r.status, sending = busy.has("search");
+  const reqAt = Date.parse(r.requestedAt);
+  const stale = isNaN(reqAt) || Date.now() - reqAt > SEARCH_STALE_MS;
+  const active = (status === "pending" || status === "running") && !stale;
+  btn.disabled = !hasPrefs() || sending || active;
+  btn.textContent = sending ? "Requesting…" : status === "running" && active ? "Searching…" : "Find jobs now";
+  let kids = [], err = false;
+  const staleMsg = " No progress after 2 hours, so you can request it again.";
+  if (searchErr) { kids = [searchErr]; err = true; }
+  else if (!hasPrefs()) kids = ["Set your search preferences first so Claude knows what to look for."];
+  else if (status === "pending") {
+    kids = [`Search requested ${ago(r.requestedAt)}. It runs at the next hourly check.`];
+    if (stale) kids.push(staleMsg);
+    const run = safeHttps(sched && sched.routineUrl);
+    if (run) kids.push(" ", el("a", { class: "open", href: run, target: "_blank", rel: "noopener", "data-key": "run-now" }, "Run it now on claude.ai ↗"),
+      el("span", { class: "fhint" }, "Click Run now there; new listings arrive in a few minutes."));
+  }
+  else if (status === "running") { kids = [`Searching for jobs… started ${ago(r.startedAt || r.requestedAt)}.`]; if (stale) kids.push(staleMsg); }
+  else if (status === "done") {
+    const n = Math.max(0, Number(r.added) || 0);
+    kids = [`Last search ${ago(r.finishedAt || r.requestedAt)}: `, el("b", {}, plural(n, "new listing"))];
+  }
+  else if (status === "failed") { kids = [`Last search failed: ${r.message || "no details were given"}`]; err = true; }
+  st.className = "fstate" + (err ? " err" : "");
+  st.replaceChildren(...kids);
+}
+
 function renderListings(d) {
+  const by = k => (a, b) => String(b[k] || "").localeCompare(String(a[k] || ""));
   const list = d.listings.filter(d.match)
-    .sort((a, b) => String(b.dateFound || "").localeCompare(String(a.dateFound || "")) || String(b.lastUpdate || "").localeCompare(String(a.lastUpdate || "")));
+    .sort((a, b) => by("dateFound")(a, b) || by("datePosted")(a, b) || by("lastUpdate")(a, b));
   $("cards").replaceChildren(...list.map(card));
   const empty = $("emptyListings");
   empty.hidden = loaded && list.length > 0;
@@ -521,17 +665,19 @@ function renderListings(d) {
 function card(j) {
   const url = safeUrl(j.url), b = busy.has(j.id);
   const meta = [j.location, j.salary].filter(Boolean).join(" · ");
-  const found = j.dateFound ? `Added ${fmtDate(j.dateFound)} · ${agoDays(j.dateFound)}` : null;
+  const stamp = (label, s) => el("span", {}, label + " ", el("b", {}, fmtDate(s)), ` (${agoDays(s)})`);
+  const dates = [j.dateFound && stamp("Added", j.dateFound), j.datePosted && stamp("Posted", j.datePosted)].filter(Boolean);
   return el("article", { class: "card" + (hl === j.id ? " hl" : ""), "data-id": j.id, "aria-labelledby": "c-" + j.id },
     el("div", { class: "card-head" },
       el("div", {},
         el("h3", { id: "c-" + j.id }, el("button", { class: "link", type: "button", "data-key": "edit:" + j.id, onclick: () => openEditor(j) }, co(j))),
-        el("p", { class: "role" }, j.role || "Role not specified")),
+        el("p", { class: "role" }, j.role || "Role not specified"),
+        dates.length ? el("p", { class: "dates" }, dates) : null),
       hasMatch(j) ? el("div", { class: "score" }, el("b", {}, Math.round(j.match) + "%"), el("small", {}, "match")) : null),
     meta ? el("p", { class: "meta" }, meta) : null,
     j.fit ? el("p", { class: "fit" }, el("span", {}, "Why it fits"), j.fit) : null,
     el("p", { class: "card-sub" },
-      el("span", {}, [j.source, found].filter(Boolean).join(" · ")),
+      el("span", {}, j.source ? `via ${j.source}` : ""),
       url ? el("a", { class: "open", href: url, target: "_blank", rel: "noopener noreferrer" }, "View posting ↗") : null),
     el("div", { class: "card-actions" },
       el("button", { class: "btn primary", type: "button", "data-key": "apply:" + j.id, disabled: b ? "" : null,
@@ -637,8 +783,7 @@ function setStatus(j, status) { if (status !== j.status) patch(j, statusChange(j
 
 async function move(j, status, msg) {
   const prev = { status: j.status, dateApplied: j.dateApplied || null };
-  const data = statusChange(j, status);
-  if (status === "applied") data.dateApplied = today();
+  const data = statusChange(j, status); // only fills dateApplied when it's empty
   if (await patch(j, data)) toast(msg, () => undoMove(j.id, status, prev));
 }
 async function undoMove(id, status, prev) {
@@ -654,6 +799,14 @@ function applyJob(j) {
   if (url) window.open(url, "_blank", "noopener"); // must stay synchronous with the click to avoid popup blocking
   move(j, "applied", `Moved ${co(j)} to Applied`);
 }
+async function requestSearch() {
+  if (!sreq) return note("Saving isn't available in this view.", true);
+  busy.add("search"); searchErr = ""; render();
+  try { await sreq.set({ status: "pending", requestedAt: new Date().toISOString() }); }
+  catch { searchErr = "Couldn't request a search. Try again in a moment."; }
+  finally { busy.delete("search"); render(); }
+}
+$("findBtn").addEventListener("click", requestSearch);
 async function restore(j) { if (await patch(j, statusChange(j, "listing"))) toast(`Restored ${co(j)} to Listings`); }
 
 async function markRead(n) {
@@ -708,7 +861,7 @@ $("panel").addEventListener("focusout", e => {
   const to = e.relatedTarget;
   if (to && !$("panel").contains(to) && to !== $("bell")) closePanel(false);
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape" && panelOpen && !$("dlg").open && !$("pdlg").open) closePanel(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && panelOpen && !$("dlg").open && !$("pdlg").open && !$("sdlg").open) closePanel(); });
 
 function openNotif(n) {
   if (!n.read) markRead(n);
@@ -752,6 +905,7 @@ function restoreFocus() {
 }
 $("dlg").addEventListener("close", restoreFocus);
 $("pdlg").addEventListener("close", restoreFocus);
+$("sdlg").addEventListener("close", restoreFocus);
 
 function openEditor(j) {
   j = j && (jobs.find(x => x.id === j.id) || j);
@@ -762,6 +916,7 @@ function openEditor(j) {
   F("match").value = j?.match ?? "";
   F("status").value = j?.status || "listing";
   F("applied").value = j?.dateApplied || "";
+  F("posted").value = /^\d{4}-\d{2}-\d{2}$/.test(j?.datePosted || "") ? j.datePosted : "";
   const del = $("delBtn"); del.hidden = !j; del.textContent = "Delete"; del.dataset.armed = ""; del.disabled = false;
   const h = $("f-history");
   const hist = Array.isArray(j?.history) ? j.history : [];
@@ -783,7 +938,7 @@ $("form").addEventListener("submit", async e => {
     url: F("url").value.trim(), source: F("source").value.trim(), salary: F("salary").value.trim(),
     fit: F("fit").value.trim(), contact: F("contact").value.trim(), notes: F("notes").value.trim(),
     match: m === "" ? null : Math.max(0, Math.min(100, Number(m))),
-    dateApplied: F("applied").value || null, lastUpdate: today()
+    dateApplied: F("applied").value || null, datePosted: F("posted").value || null, lastUpdate: today()
   };
   const status = F("status").value;
   $("saveBtn").disabled = true;
@@ -822,6 +977,7 @@ function openPrefs() {
   P("salaryMin").value = p.salaryMin ?? "";
   P("salaryCurrency").value = p.salaryCurrency || "";
   P("maxPerDay").value = p.maxPerDay ?? 10;
+  $("pErr").textContent = "";
   $("pdlg").showModal();
   P("roles").focus();
 }
@@ -843,10 +999,57 @@ $("pform").addEventListener("submit", async e => {
     lastUpdate: today()
   };
   for (const k of PREF_LISTS) data[k] = splitList(P(k).value);
-  $("pSave").disabled = true;
+  $("pSave").disabled = true; $("pErr").textContent = "";
   try { await pref.set(data); $("pdlg").close(); note(""); toast("Search preferences saved. Claude uses them on the next check."); }
-  catch { note("Couldn't save your preferences. Try again in a moment.", true); }
+  catch { $("pErr").textContent = "Couldn't save your preferences. Try again in a moment."; }
   finally { $("pSave").disabled = false; }
+});
+
+/* ---------- schedule ---------- */
+const S = k => $("s-" + k);
+const HOUR_FIELDS = ["updatesFrom", "updatesTo", "listingsHour", "summaryHour"];
+for (const k of HOUR_FIELDS) S(k).replaceChildren(...Array.from({ length: 24 }, (_, h) => el("option", { value: h }, hourLabel(h, true))));
+
+function syncSchedForm() {
+  S("updatesFrom").disabled = S("updatesTo").disabled = !S("updatesEnabled").checked;
+  S("listingsHour").disabled = !S("listingsEnabled").checked;
+  S("summaryHour").disabled = !S("summaryEnabled").checked;
+  const from = Number(S("updatesFrom").value), to = Number(S("updatesTo").value);
+  const n = from <= to ? to - from + 1 : 24 - from + to + 1;
+  S("rangeHint").textContent = !S("updatesEnabled").checked ? "Reply checks are off. Claude won't look for new replies."
+    : from === to ? `Runs once a day at ${hourLabel(from, true)}.`
+    : from > to ? `Runs past midnight: ${n} checks from ${hourLabel(from, true)} to ${hourLabel(to, true)} the next morning.`
+    : `${n} checks a day, from ${hourLabel(from, true)} to ${hourLabel(to, true)}.`;
+}
+$("sform").addEventListener("change", syncSchedForm);
+
+function openSchedule() {
+  rememberFocus();
+  const s = schedule();
+  const zones = TIMEZONES.includes(s.timezone) ? TIMEZONES : [s.timezone, ...TIMEZONES];
+  S("timezone").replaceChildren(...zones.map(z => el("option", { value: z }, tzLabel(z))));
+  S("timezone").value = s.timezone;
+  for (const k of ["updatesEnabled", "listingsEnabled", "summaryEnabled"]) S(k).checked = s[k];
+  for (const k of HOUR_FIELDS) S(k).value = String(s[k]);
+  $("sErr").textContent = "";
+  syncSchedForm();
+  $("sdlg").showModal();
+  S("timezone").focus();
+}
+$("schedBtn").addEventListener("click", openSchedule);
+$("sCancel").addEventListener("click", () => $("sdlg").close());
+
+$("sform").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!sref) { $("sErr").textContent = "Saving isn't available in this view."; return; }
+  // Merge over the stored doc so fields Claude owns (routineUrl) survive the save.
+  const data = { ...(sched || {}), timezone: S("timezone").value, updatedAt: new Date().toISOString() };
+  for (const k of ["updatesEnabled", "listingsEnabled", "summaryEnabled"]) data[k] = S(k).checked;
+  for (const k of HOUR_FIELDS) data[k] = validHour(S(k).value, SCHED_DEFAULTS[k]);
+  $("sSave").disabled = true; $("sErr").textContent = "";
+  try { await sref.set(data); $("sdlg").close(); toast("Schedule saved. It applies from the next hourly check."); }
+  catch { $("sErr").textContent = "Couldn't save the schedule. Try again in a moment."; }
+  finally { $("sSave").disabled = false; }
 });
 
 /* ---------- data ---------- */
@@ -875,11 +1078,29 @@ render();
     nLoaded = true; render();
   }, () => note("Couldn't load notifications. Reload the page to try again.", true));
 
-  pref = typeof db.doc === "function" ? db.doc("settings/preferences") : db.collection("settings").doc("preferences");
-  pref.onSnapshot(snap => {
-    const exists = typeof snap.exists === "function" ? snap.exists() : snap.exists;
-    const data = exists === false ? null : (snap.data && snap.data());
-    prefs = data || null; render();
-  }, () => note("Couldn't load your search preferences.", true));
+  const settingsDoc = name => typeof db.doc === "function" ? db.doc("settings/" + name) : db.collection("settings").doc(name);
+  pref = settingsDoc("preferences");
+  pref.onSnapshot(snap => { prefs = snapData(snap); render(); },
+    () => note("Couldn't load your search preferences.", true));
+
+  sref = settingsDoc("schedule");
+  sref.onSnapshot(snap => { sched = snapData(snap); schedLoaded = true; render(); },
+    () => note("Couldn't load your check schedule.", true));
+
+  sreq = settingsDoc("searchRequest");
+  let rLoaded = false;
+  sreq.onSnapshot(snap => {
+    const prev = searchReq && searchReq.status;
+    searchReq = snapData(snap);
+    const now = searchReq && searchReq.status;
+    if (rLoaded && now !== prev && !toastUndo) {
+      if (now === "done") toast(`Job search finished: ${plural(Math.max(0, Number(searchReq.added) || 0), "new listing")}`);
+      else if (now === "failed") toast("Job search failed. Details are in Listings.");
+    }
+    rLoaded = true; render();
+  }, () => note("Couldn't load the job search status.", true));
+
+  // Keep "x minutes ago" labels and the 2-hour re-request window current.
+  setInterval(render, 60000);
 })();
 </script>
